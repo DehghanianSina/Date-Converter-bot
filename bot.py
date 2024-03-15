@@ -1,7 +1,7 @@
 import re
 from dateutil import parser
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackContext
 
 from khayyam import JalaliDatetime, JalaliDate as GregorianDatetime
 
@@ -22,9 +22,11 @@ def convert_date_text(input_date):
                 
                 # Convert to Gregorian date
                 gregorian_date = jalali_datetime.todate()
-                gregorian_formatted = gregorian_date.strftime('%Y/%m/%d')
+                gregorian_formatted = gregorian_date.strftime('%Y-%m-%d')
 
-                return f'{input_date} ({era}) => {gregorian_formatted} (Gregorian)'
+                return f'''*input* \({era}\):\n`{input_date}`\n\n*output* \(Gregorian\):\n`{gregorian_formatted}`\n{gregorian_date.strftime("%B")}'''
+            
+            # f'{input_date} \({era}\) \=\> `{gregorian_formatted}` \(Gregorian\)\n{gregorian_date.strftime("%B")}'
             
             elif era == "Gregorian":
                 # Try parsing as Gregorian date
@@ -34,7 +36,8 @@ def convert_date_text(input_date):
                 jalali_date = JalaliDatetime(parsed_gregorian_date)
                 jalali_formatted = jalali_date.strftime('%Y/%m/%d')
 
-                return f'{input_date} ({era}) => {jalali_formatted} (Jalali)'
+                #return f'\{input_date\} \({era}\) => {jalali_formatted} \(Jalali\)'
+                return f'''*input* \({era}\):\n`{input_date}`\n\n*output* \(Jalali\):\n`{jalali_formatted}`\n{jalali_date.strftime("%B")}'''
 
         return "Invalid date format. Please use a valid date format."
 
@@ -44,7 +47,7 @@ def convert_date_text(input_date):
 def convert_date(update: Update, context: CallbackContext) -> None:
     user_input = update.message.text
     converted_date = convert_date_text(user_input)
-    update.message.reply_text(converted_date)
+    update.message.reply_text(converted_date,parse_mode='MarkdownV2')
 
 def start(update: Update, context: CallbackContext) -> None:
     update.message.reply_text("Welcome! Send me a date, and I'll convert it for you.")
@@ -61,7 +64,7 @@ def main() -> None:
     dp.add_handler(CommandHandler("start", start))
 
     # Message handler for non-command text
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, convert_date))
+    dp.add_handler(MessageHandler(filters.Filters.text & ~filters.Filters.command, convert_date))
 
     # Start the Bot
     updater.start_polling()
