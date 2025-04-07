@@ -1,6 +1,6 @@
 # Date Converter Telegram Bot
 
-A Telegram bot that converts dates between Gregorian and Jalali (Persian) calendars.
+A Telegram bot that converts dates between Gregorian and Jalali (Persian) calendars. You can test the live version by searching `@myDateConverterBot` in Telegram and interact with it.
 
 ## Features
 
@@ -88,8 +88,3 @@ This project uses the following libraries:
 If you encounter any issues or have questions, please:
 1. Check the [Issues](https://github.com/sina.dehghanian/Date_Converter_bot/issues) page
 2. Create a new issue if your problem isn't listed
-3. Contact the maintainer at [sina.dehghanian@gmail.com](mailto:sina.dehghanian@gmail.com)
-
-## Author
-
-- **sina.dehghanian** - *Initial work* - [GitHub](https://github.com/sina.dehghanian)
