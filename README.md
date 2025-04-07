@@ -14,7 +14,7 @@ A Telegram bot that converts dates between Gregorian and Jalali (Persian) calend
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/sina.dehghanian/Date_Converter_bot.git
+git clone https://github.com/DehghanianSina/Date-Converter-bot.git    
 cd Date_Converter_bot
 ```
 
