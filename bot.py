@@ -157,8 +157,8 @@ I can convert dates between Gregorian and Jalali (Persian) calendars.
 Just send me a date in either format with any arbitrary separator, and I'll convert it for you.
 
 Examples:
-- `1404-04-04` (Jalali)
-- `2025-06-25` (Gregorian)
+- 1404-04-04 (Jalali)
+- 2025-06-25 (Gregorian)
 """
     update.message.reply_text(welcome_message)
     logger.info("Bot started by user")
