@@ -1,14 +1,15 @@
 import re
 import os
 import logging
+import datetime
 from typing import Optional, Tuple
-from dateutil import parser
-from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, filters, CallbackContext
-from dotenv import load_dotenv
 
-import datetime 
-from khayyam import JalaliDatetime, JalaliDate as GregorianDatetime
+# Use jdatetime library as a replacement for khayyam
+import jdatetime
+from telegram import Update
+# Imports compatible with python-telegram-bot v13.x
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from dotenv import load_dotenv
 
 # Configure logging
 logging.basicConfig(
@@ -21,133 +22,124 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 # Constants
-LRM = '\u200E'
-RLM = '\u200F'
 footer = '''
 \-\-\-
 @myDateConverterBot
 '''
 
-def extract_date_components(input_date: str) -> Tuple[int, int, int]:
+def escape_markdown_v2(text: str) -> str:
+    """Escapes characters for Telegram's MarkdownV2."""
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
+
+def extract_date_components(input_date: str) -> Optional[Tuple[int, int, int]]:
     """
     Extract year, month, and day from a date string.
-    
-    Args:
-        input_date (str): The input date string
-        
-    Returns:
-        Tuple[int, int, int]: A tuple containing (year, month, day)
-        
-    Raises:
-        ValueError: If the date format is invalid
+    Returns None if the format is invalid.
     """
-    matches = re.findall(r'\b\d{1,4}\b', input_date)
-    if len(matches) != 3:
-        raise ValueError("Invalid date format")
-    return tuple(map(int, matches))
-
-def determine_date_era(year: int) -> Optional[str]:
-    """
-    Determine the calendar era based on the year.
-    
-    Args:
-        year (int): The year to check
-        
-    Returns:
-        Optional[str]: 'Jalali', 'Gregorian', or None
-    """
-    if 1200 <= year <= 1500:
-        return "Jalali"
-    elif 1900 <= year <= 2100:
-        return "Gregorian"
+    try:
+        # Find all sequences of digits in the input string
+        matches = re.findall(r'\d+', input_date)
+        if len(matches) >= 3:
+            # Assume the first three numbers are year, month, day
+            return int(matches[0]), int(matches[1]), int(matches[2])
+    except (ValueError, IndexError):
+        return None
     return None
+
+def determine_date_era(year: int) -> str:
+    """
+    Determines the calendar system based on the year.
+    This is a heuristic: years below 1600 are assumed to be Jalali,
+    and years above are assumed to be Gregorian in user inputs.
+    """
+    if year < 1600:
+        return "Jalali"
+    else:
+        return "Gregorian"
 
 def convert_date_text(input_date: str) -> str:
     """
     Convert a date between Gregorian and Jalali calendars.
-    
-    Args:
-        input_date (str): The input date string
-        
-    Returns:
-        str: The converted date in a formatted string
-        
-    Raises:
-        ValueError: If the date format is invalid
     """
+    date_components = extract_date_components(input_date)
+    
+    if not date_components:
+        return escape_markdown_v2("Invalid date format. Please use a format like YYYY-MM-DD.")
+
+    year, month, day = date_components
+    
     try:
-        year, month, day = extract_date_components(input_date)
         era = determine_date_era(year)
 
         if era == "Jalali":
             return convert_jalali_to_gregorian(year, month, day)
         elif era == "Gregorian":
             return convert_gregorian_to_jalali(year, month, day)
-
-        return "Invalid date format. Please use a valid date format."
-
+            
     except ValueError as e:
-        logger.error(f"Error converting date: {str(e)}")
-        return f"Error: {str(e)}. Please use a valid date format."
+        logger.error(f"Error converting date '{input_date}': {str(e)}")
+        return escape_markdown_v2(f"Error: The date you entered seems to be invalid. Please check it and try again.")
 
 def convert_jalali_to_gregorian(year: int, month: int, day: int) -> str:
     """
-    Convert a Jalali date to Gregorian.
-    
-    Args:
-        year (int): Jalali year
-        month (int): Jalali month
-        day (int): Jalali day
-        
-    Returns:
-        str: Formatted output string
+    Convert a Jalali date to Gregorian using jdatetime.
     """
-    jalali_datetime = JalaliDatetime(year, month, day)
-    gregorian_date = jalali_datetime.todate()
-    gregorian_formatted = gregorian_date.strftime('%Y-%m-%d')
+    # Set locale for jdatetime to get Persian month/day names
+    jdatetime.set_locale('fa_IR')
+    jalali_date = jdatetime.date(year, month, day)
+    gregorian_date = jalali_date.togregorian()
     
-    return f'''*input* \(Jalali\):\n`{jalali_datetime.strftime('%Y-%m-%d')}`\n\n*output* \(Gregorian\):\n`{gregorian_formatted}`\n{gregorian_date.strftime("%B")}
+    jalali_ymd = jalali_date.strftime('%Y-%m-%d')
+    gregorian_ymd = gregorian_date.strftime('%Y-%m-%d')
 
-            `{jalali_datetime.strftime("%A")}, {jalali_datetime.strftime("%d")} {jalali_datetime.strftime("%B")} {jalali_datetime.strftime("%Y")}`
-
-`{gregorian_date.strftime("%A")}, {gregorian_date.strftime("%d")} {gregorian_date.strftime("%B")} {gregorian_date.strftime("%Y")}`
+    # Full-text date formats
+    jalali_full = jalali_date.strftime("%A, %d %B %Y")
+    gregorian_full = gregorian_date.strftime("%A, %d %B %Y")
+    gregorian_month_name = gregorian_date.strftime("%B")
+    
+    return f'''*Input* \(Jalali\):\n`{escape_markdown_v2(jalali_ymd)}`\n\n*Output* \(Gregorian\):\n`{escape_markdown_v2(gregorian_ymd)}`\n{escape_markdown_v2(gregorian_month_name)}
             
-            {footer}
+`{escape_markdown_v2(jalali_full)}`
+
+`{escape_markdown_v2(gregorian_full)}`
+            
+{footer}
             '''
 
 def convert_gregorian_to_jalali(year: int, month: int, day: int) -> str:
     """
-    Convert a Gregorian date to Jalali.
-    
-    Args:
-        year (int): Gregorian year
-        month (int): Gregorian month
-        day (int): Gregorian day
-        
-    Returns:
-        str: Formatted output string
+    Convert a Gregorian date to Jalali using jdatetime.
     """
-    gregorian_date = datetime.datetime.strptime(f'{year}-{month}-{day}', '%Y-%m-%d')
-    jalali_date = JalaliDatetime(gregorian_date)
-    jalali_formatted = jalali_date.strftime('%Y/%m/%d')
+    # Set locale for jdatetime to get Persian month/day names
+    jdatetime.set_locale('fa_IR')
+    gregorian_date = datetime.date(year, month, day)
+    jalali_date = jdatetime.date.fromgregorian(date=gregorian_date)
+    
+    gregorian_ymd = gregorian_date.strftime('%Y-%m-%d')
+    jalali_ymd = jalali_date.strftime('%Y/%m/%d')
+    
+    # Full-text date formats
+    gregorian_full = gregorian_date.strftime("%A, %d %B %Y")
+    jalali_full = jalali_date.strftime("%A, %d %B %Y")
+    jalali_month_name = jalali_date.strftime("%B")
 
-    return f'''*input* \(Gregorian\):\n`{gregorian_date.strftime('%Y-%m-%d')}`\n\n*output* \(Jalali\):\n`{jalali_formatted}`\n{jalali_date.strftime("%B")}
+    return f'''*Input* \(Gregorian\):\n`{escape_markdown_v2(gregorian_ymd)}`\n\n*Output* \(Jalali\):\n`{escape_markdown_v2(jalali_ymd)}`\n{escape_markdown_v2(jalali_month_name)}
             
-            `{gregorian_date.strftime("%A")}, {gregorian_date.strftime("%d")} {gregorian_date.strftime("%B")} {gregorian_date.strftime("%Y")}`
+`{escape_markdown_v2(gregorian_full)}`
+
+`{escape_markdown_v2(jalali_full)}`
             
-`{jalali_date.strftime("%A")}, {jalali_date.strftime("%d")} {jalali_date.strftime("%B")} {jalali_date.strftime("%Y")}`
-            
-            {footer}
+{footer}
             '''
 
-def convert_date(update: Update, context: CallbackContext) -> None:
+def convert_date_handler(update: Update, context: CallbackContext) -> None:
     """
     Handle incoming date conversion requests.
-    
-    Args:
-        update (Update): The update object from Telegram
-        context (CallbackContext): The context object from Telegram
     """
+    if not update.message or not update.message.text:
+        return
+        
     user_input = update.message.text
     logger.info(f"Received date conversion request: {user_input}")
     converted_date = convert_date_text(user_input)
@@ -156,52 +148,44 @@ def convert_date(update: Update, context: CallbackContext) -> None:
 def start(update: Update, context: CallbackContext) -> None:
     """
     Handle the /start command.
-    
-    Args:
-        update (Update): The update object from Telegram
-        context (CallbackContext): The context object from Telegram
     """
     welcome_message = """
 Welcome to the Date Converter Bot! 🗓️
 
 I can convert dates between Gregorian and Jalali (Persian) calendars.
 
-Just send me a date in either format, and I'll convert it for you!
+Just send me a date in either format with any arbitrary separator, and I'll convert it for you.
 
 Examples:
-- 1403-01-01 (Jalali)
-- 2024-03-21 (Gregorian)
+- `1404-04-04` (Jalali)
+- `2025-06-25` (Gregorian)
 """
     update.message.reply_text(welcome_message)
     logger.info("Bot started by user")
 
 def main() -> None:
     """
-    Main function to start the bot.
+    Main function to start the bot using Updater class for v13.x.
     """
-    # Get the Telegram Bot Token from environment variables
     token = os.getenv('TELEGRAM_BOT_TOKEN')
     if not token:
         logger.error("TELEGRAM_BOT_TOKEN environment variable is not set!")
-        raise ValueError("TELEGRAM_BOT_TOKEN environment variable is not set!")
+        return
 
     logger.info("Starting bot...")
+    # Use Updater and dispatcher for v13.x
     updater = Updater(token)
-
-    # Get the dispatcher to register handlers
     dp = updater.dispatcher
 
-    # Command handlers
+    # Add handlers to the dispatcher
     dp.add_handler(CommandHandler("start", start))
-
-    # Message handler for non-command text
-    dp.add_handler(MessageHandler(filters.Filters.text & ~filters.Filters.command, convert_date))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, convert_date_handler))
 
     # Start the Bot
     updater.start_polling()
     logger.info("Bot started successfully")
 
-    # Run the bot until you send a signal to stop it
+    # Run the bot until you press Ctrl-C
     updater.idle()
 
 if __name__ == '__main__':
